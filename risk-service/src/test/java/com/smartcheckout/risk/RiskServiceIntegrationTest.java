@@ -14,8 +14,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.kafka.core.KafkaTemplate;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.kafka.KafkaContainer;
 import org.testcontainers.mongodb.MongoDBContainer;
 import tools.jackson.databind.json.JsonMapper;
@@ -31,18 +29,21 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * The service with a real MongoDB and a real Kafka: CheckoutRequested in, RiskAssessed out.
+ * Singleton containers: started once per test JVM, stopped after the Spring context at JVM exit.
  */
 @SpringBootTest
-@Testcontainers
 class RiskServiceIntegrationTest {
 
-    @Container
     @ServiceConnection
-    static MongoDBContainer mongo = new MongoDBContainer("mongo:8.0");
+    static final MongoDBContainer MONGO = new MongoDBContainer("mongo:8.0");
 
-    @Container
     @ServiceConnection
-    static KafkaContainer kafka = new KafkaContainer("apache/kafka:4.1.0");
+    static final KafkaContainer KAFKA = new KafkaContainer("apache/kafka:4.1.0");
+
+    static {
+        MONGO.start();
+        KAFKA.start();
+    }
 
     @Autowired
     private KafkaTemplate<String, String> kafkaTemplate;
@@ -104,7 +105,7 @@ class RiskServiceIntegrationTest {
 
     private List<ConsumerRecord<String, String>> awaitRecords(String topic, String key, int expected) {
         Map<String, Object> config = Map.of(
-                ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers(),
+                ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, KAFKA.getBootstrapServers(),
                 ConsumerConfig.GROUP_ID_CONFIG, "it-" + UUID.randomUUID(),
                 ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest",
                 ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class,
