@@ -74,6 +74,15 @@ class RiskAssessmentServiceTest {
     }
 
     @Test
+    void the_history_of_a_customer_is_returned_most_recent_first() {
+        service.assess(UUID.randomUUID(), webPayment("chk-1", "C00042", 10_000, "tok_ma", "MA", "MA", "laptop", NOW.minusSeconds(86_400)));
+        service.assess(UUID.randomUUID(), webPayment("chk-2", "C00042", 20_000, "tok_ma", "MA", "MA", "laptop", NOW));
+        service.assess(UUID.randomUUID(), webPayment("chk-3", "C00099", 30_000, "tok_x", "MA", "MA", "phone", NOW));
+
+        assertThat(service.history("C00042", 10)).extracting(s -> s.facts().checkoutId()).containsExactly("chk-2", "chk-1");
+    }
+
+    @Test
     void a_known_customer_on_a_new_device_is_flagged() {
         service.assess(UUID.randomUUID(), webPayment("chk-1", "C00042", 10_000, "tok_ma", "MA", "MA", "laptop", NOW.minusSeconds(86_400)));
 
@@ -125,6 +134,15 @@ class RiskAssessmentServiceTest {
         public boolean customerHasHistory(String customerId, String excludedCheckoutId) {
             return saved.stream().map(StoredAssessment::facts)
                     .anyMatch(f -> customerId.equals(f.customerId()) && !f.checkoutId().equals(excludedCheckoutId));
+        }
+
+        @Override
+        public List<StoredAssessment> findRecentByCustomer(String customerId, int limit) {
+            return saved.stream()
+                    .filter(s -> customerId.equals(s.facts().customerId()))
+                    .sorted((a, b) -> b.facts().occurredAt().compareTo(a.facts().occurredAt()))
+                    .limit(limit)
+                    .toList();
         }
 
         @Override

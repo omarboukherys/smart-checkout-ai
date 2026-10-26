@@ -3,6 +3,7 @@ package com.smartcheckout.risk.application.port;
 import com.smartcheckout.risk.application.StoredAssessment;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -20,4 +21,7 @@ public interface AssessmentStore {
     boolean customerHasHistory(String customerId, String excludedCheckoutId);
 
     boolean customerUsedDevice(String customerId, String deviceId, String excludedCheckoutId);
+
+    /** Latest assessments of a customer, most recent first. */
+    List<StoredAssessment> findRecentByCustomer(String customerId, int limit);
 }

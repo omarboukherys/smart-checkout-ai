@@ -6,6 +6,7 @@ import com.smartcheckout.risk.domain.RiskAssessment;
 import com.smartcheckout.risk.domain.RiskDecision;
 import com.smartcheckout.risk.domain.RiskReason;
 import com.smartcheckout.risk.domain.TransactionFacts;
+import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -47,6 +48,13 @@ class MongoAssessmentStore implements AssessmentStore {
     @Override
     public boolean customerUsedDevice(String customerId, String deviceId, String excludedCheckoutId) {
         return repository.existsByCustomerIdAndDeviceIdAndCheckoutIdNot(customerId, deviceId, excludedCheckoutId);
+    }
+
+    @Override
+    public List<StoredAssessment> findRecentByCustomer(String customerId, int limit) {
+        return repository.findByCustomerIdOrderByOccurredAtDesc(customerId, Limit.of(limit)).stream()
+                .map(MongoAssessmentStore::toStored)
+                .toList();
     }
 
     private static RiskAssessmentDocument toDocument(StoredAssessment stored) {

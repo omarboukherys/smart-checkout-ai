@@ -10,6 +10,7 @@ import com.smartcheckout.risk.domain.rules.CardVelocityRule;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -50,6 +51,11 @@ public class RiskAssessmentService {
 
     public Optional<StoredAssessment> find(String checkoutId) {
         return store.findByCheckoutId(checkoutId);
+    }
+
+    /** Payment history of an identified customer, used by the back-office and the AI agent. */
+    public List<StoredAssessment> history(String customerId, int limit) {
+        return store.findRecentByCustomer(customerId, limit);
     }
 
     /** History measured in event time (occurredAt), so replaying old events gives the same result. */
