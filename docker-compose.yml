@@ -159,6 +159,39 @@ services:
       retries: 12
       start_period: 30s
 
+  agent-service:
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: docker/java-service.Dockerfile
+      args:
+        SERVICE: agent-service
+    image: smartcheckout/agent-service:local
+    container_name: sc-agent-service
+    environment:
+      MONGO_URI: mongodb://mongodb:27017/agent
+      KAFKA_BOOTSTRAP: kafka:9092
+      CHECKOUT_URL: http://checkout-service:8080
+      RISK_URL: http://risk-service:8080
+      # Read from the .env file next to this compose file; without a key the agent uses the rules.
+      AI_CHAT_MODEL: ${AI_CHAT_MODEL:-none}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.8-flash}
+      AGENT_DAILY_BUDGET: ${AGENT_DAILY_BUDGET:-50}
+    ports:
+      - "18104:8080"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health/readiness || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
 volumes:
   pg-data:
   mongo-data:

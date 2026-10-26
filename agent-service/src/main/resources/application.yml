@@ -1,0 +1,69 @@
+server:
+  port: ${SERVER_PORT:18104}
+
+spring:
+  application:
+    name: agent-service
+  config:
+    # Local secrets (GEMINI_API_KEY...) from the .env file at the project root, ignored by git,
+    # whether the IDE starts the service from the project root or from the module folder.
+    # In Docker the same names come from environment variables.
+    import: optional:file:.env[.properties],optional:file:../.env[.properties]
+  mongodb:
+    uri: ${MONGO_URI:mongodb://localhost:27018/agent}
+  data:
+    mongodb:
+      auto-index-creation: true
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP:localhost:19092}
+    consumer:
+      group-id: agent-service
+      # A new agent does not investigate the whole past (cost): only events produced after it joined.
+      auto-offset-reset: latest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      # Only used to send failed messages to the dead-letter topic.
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      properties:
+        max.block.ms: 5000
+  ai:
+    model:
+      # "google-genai" turns the AI agent on; "none" (default) keeps the rule-based fallback only.
+      chat: ${AI_CHAT_MODEL:none}
+    google:
+      genai:
+        api-key: ${GEMINI_API_KEY:}
+        chat:
+          # Gemini 3 models are tuned for their default temperature: it is not lowered here.
+          # Answers stay controlled by the prompt, the JSON schema and the domain validation.
+          model: ${GEMINI_MODEL:gemini-3.8-flash}
+    tools:
+      # Guardrail: an investigation needs 3 tool calls; beyond these limits Spring AI throws
+      # and the service falls back to the rules (no infinite loop, bounded cost).
+      limits:
+        max-total-tool-calls: 8
+        max-calls-per-tool-default: 3
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+smartcheckout:
+  agent:
+    daily-budget: ${AGENT_DAILY_BUDGET:50}
+  services:
+    checkout-url: ${CHECKOUT_URL:http://localhost:18101}
+    risk-url: ${RISK_URL:http://localhost:18102}
+  http:
+    timeout-ms: 3000
+  kafka:
+    partitions: 6
+    replicas: 1

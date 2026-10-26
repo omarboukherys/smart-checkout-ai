@@ -91,10 +91,14 @@ Java 21 · Spring Boot 4.1 · Spring Data JPA (Hibernate 7) · Flyway · Spring 
 Prérequis : Docker Desktop, JDK 21 (ou IntelliJ IDEA).
 
 ```bash
+# 0. Optionnel, agent IA : copier .env.example en .env, puis AI_CHAT_MODEL=google-genai et GEMINI_API_KEY=<clé>
+#    (.env est ignoré par git ; sans clé, l'agent produit ses rapports avec des règles)
+cp .env.example .env
+
 # 1. Infrastructure : PostgreSQL, MongoDB, Kafka, Kafka UI
 docker compose up -d
 
-# 2a. Lancer les services depuis l'IDE (CheckoutServiceApplication, RiskServiceApplication, PaymentServiceApplication), ou :
+# 2a. Lancer les services depuis l'IDE (CheckoutServiceApplication, RiskServiceApplication, PaymentServiceApplication, AgentServiceApplication), ou :
 # 2b. tout lancer dans Docker
 docker compose --profile app up -d --build
 ```
@@ -106,6 +110,7 @@ Essayer l'API : ouvrir [`docs/requests.http`](docs/requests.http) dans IntelliJ,
 | checkout-service | http://localhost:18101/api/v1/checkouts |
 | risk-service | http://localhost:18102/api/v1/risk-assessments/{checkoutId} |
 | payment-service | http://localhost:18103/api/v1/payments/{checkoutId} |
+| agent-service | http://localhost:18104/api/v1/investigations |
 | Santé | `/actuator/health` sur chaque port |
 | Kafka UI | http://localhost:18190 |
 
@@ -123,12 +128,23 @@ Essayer l'API : ouvrir [`docs/requests.http`](docs/requests.http) dans IntelliJ,
 | Méthode | Chemin | Réponses |
 |---|---|---|
 | `GET` | `/api/v1/risk-assessments/{checkoutId}` | 200 (score, décision, raisons) · 404 |
+| `GET` | `/api/v1/risk-assessments?customerId=…&limit=20` | 200 (historique du client, le plus récent d'abord) |
 
 ### API `payment-service`
 
 | Méthode | Chemin | Réponses |
 |---|---|---|
 | `GET` | `/api/v1/payments/{checkoutId}` | 200 (statut, référence du prestataire, motif de refus) · 404 |
+
+### API `agent-service`
+
+| Méthode | Chemin | Réponses |
+|---|---|---|
+| `GET` | `/api/v1/investigations/{checkoutId}` | 200 (recommandation, confiance, résumé, preuves, questions, outils appelés) · 404 |
+| `GET` | `/api/v1/investigations?limit=20` | 200 (dernières enquêtes) |
+| `POST` | `/api/v1/investigations/{checkoutId}` | 200 nouvelle enquête · 404 encaissement inconnu · 503 risk-service indisponible |
+
+L'agent ne fait que recommander : la décision reste au superviseur (`POST /api/v1/checkouts/{id}/review`). Sans clé Gemini (`AI_CHAT_MODEL=none`), le rapport est produit par des règles.
 
 Les paiements démarrent uniquement par la commande Kafka `AuthorizePayment`. Jetons de test du prestataire simulé : `insufficient`, `expired`, `stolen` (refus), `flaky` (2 pannes puis succès), montant > 50 000 MAD (plafond).
 

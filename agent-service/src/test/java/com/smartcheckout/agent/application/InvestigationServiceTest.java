@@ -2,6 +2,7 @@ package com.smartcheckout.agent.application;
 
 import com.smartcheckout.agent.application.port.InvestigationStore;
 import com.smartcheckout.agent.application.port.Investigator;
+import com.smartcheckout.agent.application.port.RiskDecisionLookup;
 import com.smartcheckout.agent.domain.Investigation;
 import com.smartcheckout.agent.domain.InvestigationReport;
 import com.smartcheckout.agent.domain.Recommendation;
@@ -27,6 +28,8 @@ class InvestigationServiceTest {
             new InvestigationRequest("chk-1", 60, List.of("HIGH_AMOUNT", "GEO_MISMATCH"));
 
     private final InMemoryStore store = new InMemoryStore();
+    private final Map<String, InvestigationRequest> riskDecisions = new HashMap<>();
+    private final RiskDecisionLookup lookup = checkoutId -> Optional.ofNullable(riskDecisions.get(checkoutId));
     private final Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
 
     @Test
@@ -46,15 +49,16 @@ class InvestigationServiceTest {
     }
 
     @Test
-    void falls_back_to_the_rules_when_the_agent_fails() {
+    void falls_back_to_the_rules_when_the_agent_fails_and_keeps_the_root_cause() {
         ScriptedAgent agent = new ScriptedAgent(request -> {
-            throw new IllegalStateException("429 Too Many Requests");
+            throw new RuntimeException("Failed to generate content",
+                    new IllegalStateException("429 Too Many Requests"));
         });
 
         Investigation investigation = service(agent, 10).investigate(REQUEST, false);
 
         assertThat(investigation.generatedBy()).isEqualTo(Investigation.RULES);
-        assertThat(investigation.fallbackReason()).startsWith("AI error");
+        assertThat(investigation.fallbackReason()).isEqualTo("AI error: IllegalStateException");
         assertThat(investigation.report().recommendation()).isEqualTo(Recommendation.ESCALATE);
     }
 
@@ -71,7 +75,8 @@ class InvestigationServiceTest {
 
     @Test
     void uses_the_rules_when_no_api_key_is_configured() {
-        InvestigationService service = new InvestigationService(Optional.empty(), store, new DailyBudget(10), clock);
+        InvestigationService service = new InvestigationService(Optional.empty(), store, lookup, new DailyBudget(10),
+                clock);
 
         Investigation investigation = service.investigate(REQUEST, false);
 
@@ -106,8 +111,32 @@ class InvestigationServiceTest {
         assertThat(agent.calls).isEqualTo(2);
     }
 
+    @Test
+    void a_supervisor_can_ask_for_a_new_investigation_of_a_known_checkout() {
+        ScriptedAgent agent = new ScriptedAgent(request -> new Investigator.Result(
+                new InvestigationReport(Recommendation.ESCALATE, 0.7, "ok", null, null), List.of()));
+        InvestigationService service = service(agent, 10);
+        riskDecisions.put("chk-1", REQUEST);
+        service.investigate(REQUEST, false);
+
+        Optional<Investigation> again = service.reinvestigate("chk-1");
+
+        assertThat(again).isPresent();
+        assertThat(agent.calls).isEqualTo(2);
+    }
+
+    @Test
+    void a_checkout_unknown_to_the_risk_engine_cannot_be_investigated() {
+        ScriptedAgent agent = new ScriptedAgent(request -> {
+            throw new AssertionError("the agent must not be called");
+        });
+
+        assertThat(service(agent, 10).reinvestigate("unknown")).isEmpty();
+        assertThat(store.find("unknown")).isNull();
+    }
+
     private InvestigationService service(Investigator agent, int dailyBudget) {
-        return new InvestigationService(Optional.of(agent), store, new DailyBudget(dailyBudget), clock);
+        return new InvestigationService(Optional.of(agent), store, lookup, new DailyBudget(dailyBudget), clock);
     }
 
     private static final class ScriptedAgent implements Investigator {

@@ -2,6 +2,7 @@
 @checkout = http://localhost:18101
 @risk = http://localhost:18102
 @payment = http://localhost:18103
+@agent = http://localhost:18104
 
 ### 1. Open a checkout at a store terminal (POS) - expected 201 Created
 POST {{checkout}}/api/v1/checkouts
@@ -158,3 +159,17 @@ Idempotency-Key: {{$random.uuid}}
 
 ### 15. Status of the checkout of request 14
 GET {{checkout}}/api/v1/checkouts/{{declinedCheckoutId}}
+
+### ---------- AI agent (agent-service) ----------
+
+### 16. Investigation of the checkout held by request 6 (run request 6 first, then wait a few seconds)
+GET {{agent}}/api/v1/investigations/{{reviewCheckoutId}}
+
+### 17. Latest investigations
+GET {{agent}}/api/v1/investigations?limit=10
+
+### 18. Ask the agent to investigate the checkout of request 6 again
+POST {{agent}}/api/v1/investigations/{{reviewCheckoutId}}
+
+### 19. Payment history of the customer of request 6, as the agent sees it (risk-service)
+GET {{risk}}/api/v1/risk-assessments?customerId=C00077&limit=10

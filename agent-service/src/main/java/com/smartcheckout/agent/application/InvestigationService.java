@@ -2,6 +2,7 @@ package com.smartcheckout.agent.application;
 
 import com.smartcheckout.agent.application.port.InvestigationStore;
 import com.smartcheckout.agent.application.port.Investigator;
+import com.smartcheckout.agent.application.port.RiskDecisionLookup;
 import com.smartcheckout.agent.domain.DomainException;
 import com.smartcheckout.agent.domain.FallbackAdvisor;
 import com.smartcheckout.agent.domain.Investigation;
@@ -28,14 +29,16 @@ public class InvestigationService {
 
     private final Optional<Investigator> investigator;
     private final InvestigationStore store;
+    private final RiskDecisionLookup riskDecisions;
     private final DailyBudget budget;
     private final FallbackAdvisor fallback = new FallbackAdvisor();
     private final Clock clock;
 
-    public InvestigationService(Optional<Investigator> investigator, InvestigationStore store, DailyBudget budget,
-                                Clock clock) {
+    public InvestigationService(Optional<Investigator> investigator, InvestigationStore store,
+                                RiskDecisionLookup riskDecisions, DailyBudget budget, Clock clock) {
         this.investigator = investigator;
         this.store = store;
+        this.riskDecisions = riskDecisions;
         this.budget = budget;
         this.clock = clock;
     }
@@ -64,6 +67,14 @@ public class InvestigationService {
         return store.findByCheckoutId(checkoutId);
     }
 
+    /**
+     * Runs a new investigation at the supervisor's request, from the current risk decision.
+     * Empty if the risk-service does not know the checkout.
+     */
+    public Optional<Investigation> reinvestigate(String checkoutId) {
+        return riskDecisions.find(checkoutId).map(request -> investigate(request, true));
+    }
+
     public List<Investigation> recent(int limit) {
         return store.findRecent(limit);
     }
@@ -80,9 +91,19 @@ public class InvestigationService {
             log.warn("Invalid AI answer for checkout {}: {}", request.checkoutId(), e.getMessage());
             return withRules(request, startedAt, "Invalid AI answer: " + e.getMessage());
         } catch (RuntimeException e) {
-            log.warn("AI investigation failed for checkout {}: {}", request.checkoutId(), e.toString());
-            return withRules(request, startedAt, "AI error: " + e.getClass().getSimpleName());
+            // Libraries wrap the real error (HTTP 404, 429...): the root cause is what helps.
+            Throwable rootCause = rootCause(e);
+            log.warn("AI investigation failed for checkout {}: {}", request.checkoutId(), rootCause.toString(), e);
+            return withRules(request, startedAt, "AI error: " + rootCause.getClass().getSimpleName());
         }
+    }
+
+    private static Throwable rootCause(Throwable error) {
+        Throwable cause = error;
+        while (cause.getCause() != null && cause.getCause() != cause) {
+            cause = cause.getCause();
+        }
+        return cause;
     }
 
     private Investigation withRules(InvestigationRequest request, Instant startedAt, String reason) {
