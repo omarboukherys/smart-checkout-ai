@@ -1,6 +1,7 @@
 ### Requests for the IntelliJ HTTP client: click the green arrow next to each "###" block.
 @checkout = http://localhost:18101
 @risk = http://localhost:18102
+@payment = http://localhost:18103
 
 ### 1. Open a checkout at a store terminal (POS) - expected 201 Created
 POST {{checkout}}/api/v1/checkouts
@@ -112,3 +113,6 @@ Idempotency-Key: {{$random.uuid}}
   "lines": [ { "sku": "SKU-CHEWING-GUM", "label": "Chewing-gum", "quantity": 1, "unitPriceMinor": 500 } ],
   "payment": { "method": "CARD", "token": "tok_stolen_0001", "last4": "0001", "country": "MA" }
 }
+
+### 10. Payment of a checkout (payment-service) - replace the id
+GET {{payment}}/api/v1/payments/11111111-1111-1111-1111-111111111111

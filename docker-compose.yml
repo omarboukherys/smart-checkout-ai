@@ -131,6 +131,34 @@ services:
       retries: 12
       start_period: 30s
 
+  payment-service:
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: docker/java-service.Dockerfile
+      args:
+        SERVICE: payment-service
+    image: smartcheckout/payment-service:local
+    container_name: sc-payment-service
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/payment
+      DB_USER: ${POSTGRES_USER:-smartcheckout}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-smartcheckout}
+      KAFKA_BOOTSTRAP: kafka:9092
+    ports:
+      - "18103:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health/readiness || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
 volumes:
   pg-data:
   mongo-data:
