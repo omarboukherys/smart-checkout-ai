@@ -1,0 +1,47 @@
+server:
+  # 18101 when started from the IDE; the Docker image overrides it with SERVER_PORT=8080.
+  port: ${SERVER_PORT:18101}
+
+spring:
+  application:
+    name: checkout-service
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:15432/checkout}
+    username: ${DB_USER:smartcheckout}
+    password: ${DB_PASSWORD:smartcheckout}
+  jpa:
+    open-in-view: false
+    hibernate:
+      # Flyway owns the schema (db/migration); Hibernate never changes it.
+      ddl-auto: none
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP:localhost:19092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      properties:
+        enable.idempotence: true
+        # Fail fast when Kafka is down: the event stays in the outbox and is retried.
+        max.block.ms: 5000
+        request.timeout.ms: 3000
+        delivery.timeout.ms: 8000
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+smartcheckout:
+  outbox:
+    poll-interval-ms: 500
+    batch-size: 100
+    send-timeout-ms: 10000
+  kafka:
+    partitions: 6
+    replicas: 1

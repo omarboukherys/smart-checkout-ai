@@ -1,0 +1,63 @@
+### Requests for the IntelliJ HTTP client: click the green arrow next to each "###" block.
+@checkout = http://localhost:18101
+
+### 1. Open a checkout at a store terminal (POS) - expected 201 Created
+POST {{checkout}}/api/v1/checkouts
+Content-Type: application/json
+Idempotency-Key: {{$random.uuid}}
+
+{
+  "storeId": "CASA-MAARIF-01",
+  "channel": "POS",
+  "currency": "MAD",
+  "lines": [
+    { "sku": "SKU-CAFE-500", "label": "Cafe moulu 500 g", "quantity": 2, "unitPriceMinor": 4590 },
+    { "sku": "SKU-THE-250", "label": "The vert 250 g", "quantity": 1, "unitPriceMinor": 2250 }
+  ],
+  "payment": { "method": "CARD", "token": "tok_visa_4242", "last4": "4242", "country": "MA" },
+  "context": { "ipCountry": "MA", "deviceId": "POS-TERM-07" }
+}
+
+### 2. Same Idempotency-Key sent twice - first call 201, second call 200 with the same id
+POST {{checkout}}/api/v1/checkouts
+Content-Type: application/json
+Idempotency-Key: demo-replay-001
+
+{
+  "storeId": "CASA-MAARIF-01",
+  "channel": "WEB",
+  "customerId": "C00042",
+  "currency": "MAD",
+  "lines": [
+    { "sku": "SKU-CASQUE-BT", "label": "Casque Bluetooth", "quantity": 1, "unitPriceMinor": 89900 }
+  ],
+  "payment": { "method": "CARD", "token": "tok_mastercard_5454", "last4": "5454", "country": "MA" },
+  "context": { "ipCountry": "MA", "deviceId": "web-fp-8f2c1a" }
+}
+
+### 3. Raw card number instead of a PSP token - expected 422 (PCI-DSS rule)
+POST {{checkout}}/api/v1/checkouts
+Content-Type: application/json
+Idempotency-Key: {{$random.uuid}}
+
+{
+  "storeId": "CASA-MAARIF-01",
+  "channel": "POS",
+  "currency": "MAD",
+  "lines": [ { "sku": "SKU-CAFE-500", "label": "Cafe moulu 500 g", "quantity": 1, "unitPriceMinor": 4590 } ],
+  "payment": { "method": "CARD", "token": "4111 1111 1111 1111", "last4": "1111", "country": "MA" }
+}
+
+### 4. Missing fields - expected 400 with the list of errors
+POST {{checkout}}/api/v1/checkouts
+Content-Type: application/json
+Idempotency-Key: {{$random.uuid}}
+
+{
+  "channel": "POS",
+  "currency": "mad",
+  "lines": []
+}
+
+### 5. Latest checkouts
+GET {{checkout}}/api/v1/checkouts?limit=10
