@@ -75,6 +75,36 @@ services:
       kafka:
         condition: service_healthy
 
+  # --- Application services: started only with "docker compose --profile app up -d --build".
+  # Without the profile, run them from the IDE against the infrastructure above.
+  checkout-service:
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: docker/java-service.Dockerfile
+      args:
+        SERVICE: checkout-service
+    image: smartcheckout/checkout-service:local
+    container_name: sc-checkout-service
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/checkout
+      DB_USER: ${POSTGRES_USER:-smartcheckout}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-smartcheckout}
+      KAFKA_BOOTSTRAP: kafka:9092
+    ports:
+      - "18101:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health/readiness || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
 volumes:
   pg-data:
   mongo-data:
