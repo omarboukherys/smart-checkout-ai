@@ -21,6 +21,7 @@
     <modules>
         <module>contracts</module>
         <module>checkout-service</module>
+        <module>risk-service</module>
     </modules>
 
     <properties>
