@@ -105,6 +105,32 @@ services:
       retries: 12
       start_period: 30s
 
+  risk-service:
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: docker/java-service.Dockerfile
+      args:
+        SERVICE: risk-service
+    image: smartcheckout/risk-service:local
+    container_name: sc-risk-service
+    environment:
+      MONGO_URI: mongodb://mongodb:27017/risk
+      KAFKA_BOOTSTRAP: kafka:9092
+    ports:
+      - "18102:8080"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health/readiness || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
 volumes:
   pg-data:
   mongo-data:

@@ -1,5 +1,6 @@
 ### Requests for the IntelliJ HTTP client: click the green arrow next to each "###" block.
 @checkout = http://localhost:18101
+@risk = http://localhost:18102
 
 ### 1. Open a checkout at a store terminal (POS) - expected 201 Created
 POST {{checkout}}/api/v1/checkouts
@@ -61,3 +62,53 @@ Idempotency-Key: {{$random.uuid}}
 
 ### 5. Latest checkouts
 GET {{checkout}}/api/v1/checkouts?limit=10
+
+### 6. Online, 8 999 MAD, French card, Moroccan IP - risk REVIEW (score 60)
+POST {{checkout}}/api/v1/checkouts
+Content-Type: application/json
+Idempotency-Key: {{$random.uuid}}
+
+{
+  "storeId": "WEB-SHOP",
+  "channel": "WEB",
+  "customerId": "C00077",
+  "currency": "MAD",
+  "lines": [ { "sku": "SKU-LAPTOP-14", "label": "Ordinateur portable 14 pouces", "quantity": 1, "unitPriceMinor": 899900 } ],
+  "payment": { "method": "CARD", "token": "tok_visa_fr_1881", "last4": "1881", "country": "FR" },
+  "context": { "ipCountry": "MA", "deviceId": "web-fp-77aa01" }
+}
+
+> {%
+    client.global.set("reviewCheckoutId", response.body.id);
+%}
+
+### 7. Risk decision of the checkout created by request 6 (wait 1 second after request 6)
+GET {{risk}}/api/v1/risk-assessments/{{reviewCheckoutId}}
+
+### 8. Online, 25 000 MAD, French card, Moroccan IP - risk BLOCK (score 80)
+POST {{checkout}}/api/v1/checkouts
+Content-Type: application/json
+Idempotency-Key: {{$random.uuid}}
+
+{
+  "storeId": "WEB-SHOP",
+  "channel": "WEB",
+  "customerId": "C00078",
+  "currency": "MAD",
+  "lines": [ { "sku": "SKU-TV-75", "label": "Televiseur 75 pouces", "quantity": 1, "unitPriceMinor": 2500000 } ],
+  "payment": { "method": "CARD", "token": "tok_visa_fr_9001", "last4": "9001", "country": "FR" },
+  "context": { "ipCountry": "MA", "deviceId": "web-fp-78bb02" }
+}
+
+### 9. Card testing: run this request 5 times quickly - the 3rd gives CARD_VELOCITY, the 5th CARD_TESTING (REVIEW)
+POST {{checkout}}/api/v1/checkouts
+Content-Type: application/json
+Idempotency-Key: {{$random.uuid}}
+
+{
+  "storeId": "CASA-MAARIF-01",
+  "channel": "POS",
+  "currency": "MAD",
+  "lines": [ { "sku": "SKU-CHEWING-GUM", "label": "Chewing-gum", "quantity": 1, "unitPriceMinor": 500 } ],
+  "payment": { "method": "CARD", "token": "tok_stolen_0001", "last4": "0001", "country": "MA" }
+}
