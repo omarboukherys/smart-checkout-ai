@@ -119,6 +119,31 @@ public final class Checkout {
         return !ALLOWED_TRANSITIONS.containsKey(status);
     }
 
+    /**
+     * A human reviewer approved a checkout held by the risk engine. The status stays ON_HOLD until the
+     * payment provider answers; the reason keeps track of who approved it.
+     */
+    public void recordReviewApproval(String reviewer, Instant at) {
+        requireOnHold();
+        requireText(reviewer, "A reviewer is required");
+        this.statusReason = "Approved by " + reviewer + ", payment in progress";
+        this.updatedAt = Objects.requireNonNull(at, "at");
+    }
+
+    /** A human reviewer refused a checkout held by the risk engine. */
+    public void rejectAfterReview(String reviewer, String comment, Instant at) {
+        requireOnHold();
+        requireText(reviewer, "A reviewer is required");
+        transitionTo(CheckoutStatus.REJECTED,
+                "Rejected by " + reviewer + (comment == null || comment.isBlank() ? "" : ": " + comment), at);
+    }
+
+    private void requireOnHold() {
+        if (status != CheckoutStatus.ON_HOLD) {
+            throw new DomainException("Only a checkout on hold can be reviewed (current status: " + status + ")");
+        }
+    }
+
     public int itemCount() {
         return lines.stream().mapToInt(CheckoutLine::quantity).sum();
     }

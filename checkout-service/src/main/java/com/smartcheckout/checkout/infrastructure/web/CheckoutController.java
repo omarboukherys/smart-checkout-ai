@@ -1,5 +1,6 @@
 package com.smartcheckout.checkout.infrastructure.web;
 
+import com.smartcheckout.checkout.application.CheckoutOrchestrator;
 import com.smartcheckout.checkout.application.CheckoutService;
 import com.smartcheckout.checkout.application.OpenCheckoutResult;
 import jakarta.validation.Valid;
@@ -26,9 +27,11 @@ import java.util.UUID;
 class CheckoutController {
 
     private final CheckoutService checkoutService;
+    private final CheckoutOrchestrator orchestrator;
 
-    CheckoutController(CheckoutService checkoutService) {
+    CheckoutController(CheckoutService checkoutService, CheckoutOrchestrator orchestrator) {
         this.checkoutService = checkoutService;
+        this.orchestrator = orchestrator;
     }
 
     /**
@@ -49,6 +52,15 @@ class CheckoutController {
     @GetMapping("/{id}")
     CheckoutResponse get(@PathVariable UUID id) {
         return CheckoutResponse.from(checkoutService.get(id));
+    }
+
+    /**
+     * Human review of a checkout held by the risk engine: APPROVE sends it to payment, REJECT refuses it.
+     * 422 if the checkout is not on hold.
+     */
+    @PostMapping("/{id}/review")
+    CheckoutResponse review(@PathVariable UUID id, @Valid @RequestBody ReviewRequest request) {
+        return CheckoutResponse.from(orchestrator.review(id, request.decision(), request.reviewer(), request.comment()));
     }
 
     @GetMapping

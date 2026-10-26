@@ -97,6 +97,27 @@ class CheckoutTest {
         assertThat(checkout.statusReason()).isEqualTo("Approved by reviewer");
     }
 
+    @Test
+    void a_review_approval_keeps_the_checkout_on_hold_and_records_the_reviewer() {
+        Checkout checkout = openAtStore();
+        checkout.transitionTo(CheckoutStatus.ON_HOLD, "Held for review", NOW.plusSeconds(1));
+
+        checkout.recordReviewApproval("amina.supervisor", NOW.plusSeconds(60));
+
+        assertThat(checkout.status()).isEqualTo(CheckoutStatus.ON_HOLD);
+        assertThat(checkout.statusReason()).contains("amina.supervisor");
+    }
+
+    @Test
+    void a_checkout_that_is_not_on_hold_cannot_be_reviewed() {
+        Checkout checkout = openAtStore();
+
+        assertThatThrownBy(() -> checkout.recordReviewApproval("amina.supervisor", NOW))
+                .isInstanceOf(DomainException.class);
+        assertThatThrownBy(() -> checkout.rejectAfterReview("amina.supervisor", "no", NOW))
+                .isInstanceOf(DomainException.class);
+    }
+
     private static Checkout openAtStore() {
         return Checkout.open("key-1", "CASA-01", Channel.POS, null, "MAD", BASKET, CARD, ClientContext.none(), NOW);
     }
