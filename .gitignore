@@ -1,0 +1,24 @@
+# Build
+target/
+*.jar
+!**/src/**/*.jar
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+
+# Front-end
+node_modules/
+dist/
+
+# Secrets and local config
+.env
+*.local
+
+# OS
+.DS_Store
+Thumbs.db
