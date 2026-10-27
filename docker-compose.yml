@@ -176,7 +176,8 @@ services:
       # Read from the .env file next to this compose file; without a key the agent uses the rules.
       AI_CHAT_MODEL: ${AI_CHAT_MODEL:-none}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.8-flash}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.6-flash}
+      GEMINI_FALLBACK_MODEL: ${GEMINI_FALLBACK_MODEL-gemini-3.5-flash-lite}
       AGENT_DAILY_BUDGET: ${AGENT_DAILY_BUDGET:-50}
     ports:
       - "18104:8080"

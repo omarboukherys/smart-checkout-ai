@@ -14,13 +14,11 @@ public interface Investigator {
 
     Result investigate(InvestigationRequest request);
 
-    /** Model name, kept in the audit trail. */
-    String model();
-
     /**
      * @param report    the agent's answer, already validated by the domain
      * @param toolCalls the tools the agent decided to call, in order
+     * @param model     the model that produced the report (a fallback model may have answered), for the audit trail
      */
-    record Result(InvestigationReport report, List<ToolCall> toolCalls) {
+    record Result(InvestigationReport report, List<ToolCall> toolCalls, String model) {
     }
 }

@@ -38,9 +38,9 @@ class ArchitectureTest {
 
     /** Only the ai adapter talks to the model: switching from Gemini to another provider changes one package. */
     @Test
-    void only_the_ai_adapter_uses_spring_ai() {
+    void only_the_ai_adapter_uses_spring_ai_and_the_gemini_sdk() {
         noClasses().that().resideOutsideOfPackage("..infrastructure.ai..")
-                .should().dependOnClassesThat().resideInAPackage("org.springframework.ai..")
+                .should().dependOnClassesThat().resideInAnyPackage("org.springframework.ai..", "com.google.genai..")
                 .check(CLASSES);
     }
 

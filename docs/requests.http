@@ -168,7 +168,8 @@ GET {{agent}}/api/v1/investigations/{{reviewCheckoutId}}
 ### 17. Latest investigations
 GET {{agent}}/api/v1/investigations?limit=10
 
-### 18. Ask the agent to investigate the checkout of request 6 again
+### 18. Ask the agent to investigate the checkout of request 6 again (about 15-30 s with Gemini)
+# @timeout 120
 POST {{agent}}/api/v1/investigations/{{reviewCheckoutId}}
 
 ### 19. Payment history of the customer of request 6, as the agent sees it (risk-service)

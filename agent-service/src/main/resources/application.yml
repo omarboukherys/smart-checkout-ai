@@ -38,7 +38,7 @@ spring:
         chat:
           # Gemini 3 models are tuned for their default temperature: it is not lowered here.
           # Answers stay controlled by the prompt, the JSON schema and the domain validation.
-          model: ${GEMINI_MODEL:gemini-3.8-flash}
+          model: ${GEMINI_MODEL:gemini-3.6-flash}
     tools:
       # Guardrail: an investigation needs 3 tool calls; beyond these limits Spring AI throws
       # and the service falls back to the rules (no infinite loop, bounded cost).
@@ -59,6 +59,13 @@ management:
 smartcheckout:
   agent:
     daily-budget: ${AGENT_DAILY_BUDGET:50}
+    # Tried in order: an overloaded model (503) or an exhausted quota (429) hands over to the next one,
+    # then the rules take over. Leave GEMINI_FALLBACK_MODEL empty to use a single model.
+    models: ${GEMINI_MODEL:gemini-3.6-flash},${GEMINI_FALLBACK_MODEL:gemini-3.5-flash-lite}
+    gemini:
+      # Per model call, retries included; the Google SDK default is 5 attempts and no timeout.
+      timeout-ms: 20000
+      attempts: 2
   services:
     checkout-url: ${CHECKOUT_URL:http://localhost:18101}
     risk-url: ${RISK_URL:http://localhost:18102}

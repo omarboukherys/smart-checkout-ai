@@ -38,7 +38,7 @@ class InvestigationServiceTest {
                 new InvestigationReport(Recommendation.ESCALATE, 0.7, "Carte FR, IP MA, client inconnu.",
                         List.of("Score 60"), List.of("Êtes-vous à l'étranger ?")),
                 List.of(new ToolCall("getRiskAssessment", "chk-1", 12, true),
-                        new ToolCall("getCheckout", "chk-1", 9, true))));
+                        new ToolCall("getCheckout", "chk-1", 9, true)), "test-model"));
 
         Investigation investigation = service(agent, 10).investigate(REQUEST, false);
 
@@ -65,7 +65,7 @@ class InvestigationServiceTest {
     @Test
     void falls_back_to_the_rules_when_the_answer_is_invalid() {
         ScriptedAgent agent = new ScriptedAgent(request -> new Investigator.Result(
-                new InvestigationReport(Recommendation.APPROVE, 1.4, "x", null, null), List.of()));
+                new InvestigationReport(Recommendation.APPROVE, 1.4, "x", null, null), List.of(), "test-model"));
 
         Investigation investigation = service(agent, 10).investigate(REQUEST, false);
 
@@ -87,7 +87,7 @@ class InvestigationServiceTest {
     @Test
     void uses_the_rules_once_the_daily_budget_is_spent() {
         ScriptedAgent agent = new ScriptedAgent(request -> new Investigator.Result(
-                new InvestigationReport(Recommendation.ESCALATE, 0.7, "ok", null, null), List.of()));
+                new InvestigationReport(Recommendation.ESCALATE, 0.7, "ok", null, null), List.of(), "test-model"));
         InvestigationService service = service(agent, 1);
 
         service.investigate(new InvestigationRequest("chk-1", 60, List.of()), false);
@@ -100,7 +100,7 @@ class InvestigationServiceTest {
     @Test
     void an_existing_investigation_is_reused_unless_a_new_one_is_forced() {
         ScriptedAgent agent = new ScriptedAgent(request -> new Investigator.Result(
-                new InvestigationReport(Recommendation.ESCALATE, 0.7, "ok", null, null), List.of()));
+                new InvestigationReport(Recommendation.ESCALATE, 0.7, "ok", null, null), List.of(), "test-model"));
         InvestigationService service = service(agent, 10);
 
         service.investigate(REQUEST, false);
@@ -114,7 +114,7 @@ class InvestigationServiceTest {
     @Test
     void a_supervisor_can_ask_for_a_new_investigation_of_a_known_checkout() {
         ScriptedAgent agent = new ScriptedAgent(request -> new Investigator.Result(
-                new InvestigationReport(Recommendation.ESCALATE, 0.7, "ok", null, null), List.of()));
+                new InvestigationReport(Recommendation.ESCALATE, 0.7, "ok", null, null), List.of(), "test-model"));
         InvestigationService service = service(agent, 10);
         riskDecisions.put("chk-1", REQUEST);
         service.investigate(REQUEST, false);
@@ -152,11 +152,6 @@ class InvestigationServiceTest {
         public Result investigate(InvestigationRequest request) {
             calls++;
             return behaviour.apply(request);
-        }
-
-        @Override
-        public String model() {
-            return "test-model";
         }
     }
 

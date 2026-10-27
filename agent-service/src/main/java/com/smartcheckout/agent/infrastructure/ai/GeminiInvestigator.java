@@ -3,10 +3,13 @@ package com.smartcheckout.agent.infrastructure.ai;
 import com.smartcheckout.agent.application.InvestigationRequest;
 import com.smartcheckout.agent.application.port.Investigator;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.google.genai.GoogleGenAiChatOptions;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Component;
+
+import java.util.List;
 
 /**
  * The AI agent: Gemini (through Spring AI) decides which tools to call, reads the data,
@@ -15,6 +18,7 @@ import org.springframework.stereotype.Component;
  * <p>
  * The tool loop (model asks for a tool, Spring AI runs it, sends the result back) is handled by
  * Spring AI, with a hard limit on the number of tool calls (spring.ai.tools.limits).
+ * If a model is overloaded or out of quota, the next configured model is tried.
  */
 @Component
 @ConditionalOnProperty(name = "spring.ai.model.chat", havingValue = "google-genai")
@@ -22,30 +26,29 @@ class GeminiInvestigator implements Investigator {
 
     private final ChatClient chatClient;
     private final ReadOnlyServices services;
-    private final String model;
+    private final List<String> models;
 
     GeminiInvestigator(ChatClient.Builder chatClientBuilder, ReadOnlyServices services,
                        @Value("classpath:prompts/investigator-system.md") Resource systemPrompt,
-                       @Value("${spring.ai.google.genai.chat.model:gemini-3.8-flash}") String model) {
+                       @Value("${smartcheckout.agent.models}") List<String> models) {
         this.chatClient = chatClientBuilder.defaultSystem(systemPrompt).build();
         this.services = services;
-        this.model = model;
+        this.models = models.stream().map(String::strip).filter(model -> !model.isEmpty()).distinct().toList();
     }
 
     @Override
     public Result investigate(InvestigationRequest request) {
+        // One trace for all attempts: tools called before a model failed were real reads too.
         InvestigationTools tools = new InvestigationTools(services);
-        AgentAnswer answer = chatClient.prompt()
-                .user(userMessage(request))
-                .tools(tools)
-                .call()
-                .entity(AgentAnswer.class);
-        return new Result(AgentAnswer.toReport(answer), tools.calls());
-    }
-
-    @Override
-    public String model() {
-        return model;
+        return ModelFallback.firstAvailable(models, model -> {
+            AgentAnswer answer = chatClient.prompt()
+                    .options(GoogleGenAiChatOptions.builder().model(model))
+                    .user(userMessage(request))
+                    .tools(tools)
+                    .call()
+                    .entity(AgentAnswer.class);
+            return new Result(AgentAnswer.toReport(answer), tools.calls(), model);
+        });
     }
 
     /** Only identifiers and codes from our own events: no free text from a customer reaches the prompt. */

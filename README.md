@@ -21,7 +21,9 @@ flowchart LR
     K -- payment.commands --> PS[payment-service<br/>PostgreSQL + PSP simulé]
     PS -- payment.events --> K
     K -- payment.events --> CS
-    K -- paiements en attente --> AG[agent-service<br/>Spring AI]
+    K -- risk.events REVIEW --> AG[agent-service<br/>Spring AI + Gemini<br/>MongoDB]
+    AG -. "outils GET (lecture seule)" .-> RS
+    AG -. "outils GET (lecture seule)" .-> CS
     BO[Back-office Vue.js] --> CS
     BO --> AG
 ```
@@ -31,7 +33,7 @@ flowchart LR
 | 1 | `checkout-service` : API REST idempotente, PostgreSQL, outbox → Kafka, tests, CI | ✅ |
 | 2 | `risk-service` : score de risque explicable, consommateur idempotent, MongoDB, dead-letter topic | ✅ |
 | 3 | `payment-service` + saga orchestrée par le checkout : PSP simulé idempotent, inbox/outbox, validation humaine | ✅ |
-| 4 | `agent-service` : agent Spring AI (outils, sortie structurée, validation humaine) | 🚧 |
+| 4 | `agent-service` : agent Spring AI + Gemini qui enquête sur les paiements en attente (outils en lecture seule, sortie structurée validée, repli par règles, modèle de secours, audit) ; un humain décide | ✅ |
 | 5 | Front Vue.js 3 : caisse et back-office | 🚧 |
 | 6 | Qualité : SonarCloud, couverture, observabilité | 🚧 |
 
@@ -45,6 +47,7 @@ flowchart LR
 - **Score de risque explicable** : règles indépendantes (montant, vélocité de la carte, pays carte/IP, nouvel appareil), score entier sur 100, chaque décision accompagnée de ses raisons ; ajouter une règle = ajouter une classe (principe ouvert/fermé)
 - **Consommateur idempotent**, temps de l'événement, dead-letter topic ; jeton de carte jamais stocké (empreinte SHA-256) → [ADR 0004](docs/adr/0004-consommateur-idempotent.md)
 - **Saga** : chorégraphie pour le risque, orchestration du paiement par le checkout, **inbox + outbox** (chaque événement appliqué une seule fois), **validation humaine** des paiements en attente, paiement idempotent jusqu'au prestataire (clé d'idempotence, état `AUTHORIZING` avant l'appel, pas de transaction ouverte pendant l'appel distant) → [ADR 0005](docs/adr/0005-saga-encaissement.md)
+- **Agent IA (human-in-the-loop)** : sur chaque paiement mis en attente, un agent Spring AI + Gemini appelle des outils en lecture seule (décision du moteur, panier, historique du client) et produit un rapport structuré, validé par le domaine. Il recommande, le superviseur décide. Garde-fous : arguments validés, limites d'appels, budget quotidien, résultats d'outils traités comme des données ; modèle de secours sur 503/429 ; repli par règles sans clé ou en cas d'erreur ; trace d'audit (modèle, outils, durée) → [ADR 0006](docs/adr/0006-agent-ia-recommande-humain-decide.md)
 
 ### Parcours d'un paiement
 
@@ -84,7 +87,7 @@ sequenceDiagram
 
 ## Stack
 
-Java 21 · Spring Boot 4.1 · Spring Data JPA (Hibernate 7) · Flyway · Spring Kafka · Apache Kafka 4.1 (KRaft) · PostgreSQL 17 · MongoDB 8 · JUnit 6 · AssertJ · ArchUnit · Testcontainers 2 · Docker · GitHub Actions
+Java 21 · Spring Boot 4.1 · Spring AI 2.0 (Gemini, tool calling, sortie structurée) · Spring Data JPA (Hibernate 7) · Flyway · Spring Kafka · Apache Kafka 4.1 (KRaft) · PostgreSQL 17 · MongoDB 8 · JUnit 6 · AssertJ · ArchUnit · Testcontainers 2 · Docker · GitHub Actions
 
 ## Démarrage rapide
 
@@ -154,13 +157,15 @@ Les paiements démarrent uniquement par la commande Kafka `AuthorizePayment`. Je
 mvn verify
 ```
 
-- **Domaine** (`CheckoutTest`, `RiskEngineTest`, `PaymentTest`) : règles métier en Java pur.
-- **Cas d'usage** (`CheckoutServiceTest`, `CheckoutOrchestratorTest`, `RiskAssessmentServiceTest`, `PaymentServiceTest`) : ports remplacés par des implémentations en mémoire (idempotence, rejeu, saga, reprise après panne).
+- **Domaine** (`CheckoutTest`, `RiskEngineTest`, `PaymentTest`, `InvestigationReportTest`, `FallbackAdvisorTest`) : règles métier en Java pur.
+- **Cas d'usage** (`CheckoutServiceTest`, `CheckoutOrchestratorTest`, `RiskAssessmentServiceTest`, `PaymentServiceTest`, `InvestigationServiceTest`) : ports remplacés par des implémentations en mémoire (idempotence, rejeu, saga, reprise après panne, repli de l'agent).
+- **Agent IA sans LLM** (`InvestigationToolsTest`, `AgentAnswerTest`, `ModelFallbackTest`) : garde-fous des outils, validation de la réponse du modèle, bascule de modèle sur 503/429, sans appel réseau ni clé.
 - **Architecture** (`ArchitectureTest` dans chaque service) : le domaine ne dépend d'aucun framework, l'application ne dépend pas de l'infrastructure.
 - **Intégration** (Testcontainers, conteneurs partagés par JVM) :
   - `CheckoutApiIntegrationTest` (PostgreSQL + Kafka) : API, outbox, saga APPROVE → commande → `PAID`, mise en attente puis validation humaine ;
   - `RiskServiceIntegrationTest` (MongoDB + Kafka) : décision explicable, rejeu idempotent, dead-letter topic ;
-  - `PaymentServiceIntegrationTest` (PostgreSQL + Kafka) : autorisation, rejeu sans second débit, refus, prestataire instable relancé.
+  - `PaymentServiceIntegrationTest` (PostgreSQL + Kafka) : autorisation, rejeu sans second débit, refus, prestataire instable relancé ;
+  - `AgentServiceIntegrationTest` (MongoDB + Kafka, IA désactivée) : paiement en attente → rapport, paiement approuvé ignoré, 503 si risk-service est indisponible.
 
 La CI GitHub Actions exécute l'ensemble à chaque push.
 

@@ -86,7 +86,7 @@ public class InvestigationService {
         try {
             Investigator.Result result = agent.investigate(request);
             return new Investigation(request.checkoutId(), request.riskScore(), request.reasonCodes(),
-                    result.report(), agent.model(), null, result.toolCalls(), startedAt, clock.instant());
+                    result.report(), result.model(), null, result.toolCalls(), startedAt, clock.instant());
         } catch (DomainException e) {
             log.warn("Invalid AI answer for checkout {}: {}", request.checkoutId(), e.getMessage());
             return withRules(request, startedAt, "Invalid AI answer: " + e.getMessage());
